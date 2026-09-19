@@ -26,18 +26,30 @@ export default function Students() {
       .eq('teacher_id', user.id)
       .order('created_at', { ascending: false })
 
-    setStudents(data || [])
+    const studentIds = (data || []).map(s => s.id)
+
+    const { data: chapterData } = await supabase
+      .from('student_chapters')
+      .select('student_id, status')
+      .in('student_id', studentIds)
+
+    const studentsWithProgress = (data || []).map(student => {
+      const chapters = (chapterData || []).filter(c => c.student_id === student.id)
+      const total = chapters.length
+      const completed = chapters.filter(c => c.status === 'completed').length
+      return {
+        ...student,
+        progress: total > 0 ? Math.round((completed / total) * 100) : 0,
+      }
+    })
+
+    setStudents(studentsWithProgress)
     setLoading(false)
   }
 
   const filtered = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   )
-
-  const getProgress = (student) => {
-    if (!student.student_subjects || student.student_subjects.length === 0) return 0
-    return 0
-  }
 
   if (loading) {
     return (
@@ -130,9 +142,9 @@ export default function Students() {
               </div>
 
               <div className="w-full bg-gray-100 rounded-full h-2">
-                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${getProgress(student)}%` }}></div>
+                <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${student.progress}%` }}></div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">{getProgress(student)}% complete</p>
+              <p className="text-xs text-gray-500 mt-1">{student.progress}% complete</p>
             </Link>
           ))}
         </div>

@@ -45,12 +45,13 @@ export default function Dashboard() {
 
     if (studentIds.length > 0) {
       const { data: recent } = await supabase
-        .from('class_sessions')
-        .select('*, students(name)')
+        .from('student_chapters')
+        .select('id, subject_name, chapter_name, completed_at, students(name)')
         .in('student_id', studentIds)
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(5)
+        .eq('status', 'completed')
+        .not('completed_at', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(4)
 
       setRecentActivity(recent || [])
     }
@@ -106,25 +107,25 @@ export default function Dashboard() {
           {recentActivity.length === 0 ? (
             <div className="text-center py-8">
               <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No recent activity yet.</p>
-              <p className="text-sm text-gray-400 mt-1">Start by recording a class session.</p>
+              <p className="text-gray-500">No completed chapters yet.</p>
+              <p className="text-sm text-gray-400 mt-1">Start tracking student progress.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {recentActivity.map((session) => (
-                <div key={session.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              {recentActivity.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {session.students?.name} — {session.chapter_name || session.topic}
+                        {item.students?.name} — {item.chapter_name}
                       </p>
-                      <p className="text-xs text-gray-500">{session.topic}</p>
+                      <p className="text-xs text-gray-500">{item.subject_name}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-900">{session.date}</p>
-                    <p className="text-xs text-gray-500">{session.duration} min</p>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">Completed</span>
+                    <p className="text-xs text-gray-500 mt-1">{new Date(item.completed_at).toLocaleDateString()}</p>
                   </div>
                 </div>
               ))}
