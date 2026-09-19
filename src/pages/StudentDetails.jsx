@@ -274,7 +274,13 @@ export default function StudentDetails() {
                       </div>
                     ) : (
                       <div className="divide-y divide-gray-100">
-                        {sub.student_chapters.map((chapter) => (
+                        {[...sub.student_chapters].sort((a, b) => {
+                          if (a.status === 'completed' && b.status !== 'completed') return 1
+                          if (a.status !== 'completed' && b.status === 'completed') return -1
+                          const numA = parseInt(a.chapter_name.match(/\d+/)?.[0] || '0')
+                          const numB = parseInt(b.chapter_name.match(/\d+/)?.[0] || '0')
+                          return numA - numB
+                        }).map((chapter) => (
                           <div key={chapter.id} className="px-5 py-3 flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-gray-900">{chapter.chapter_name}</p>
@@ -290,13 +296,10 @@ export default function StudentDetails() {
                               className={`px-3 py-1.5 rounded-lg text-xs font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                                 chapter.status === 'completed'
                                   ? 'bg-green-50 border-green-200 text-green-700'
-                                  : chapter.status === 'running'
-                                  ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
                                   : 'bg-gray-50 border-gray-200 text-gray-600'
                               }`}
                             >
                               <option value="not_started">Not Started</option>
-                              <option value="running">Running</option>
                               <option value="completed">Completed</option>
                             </select>
                           </div>
