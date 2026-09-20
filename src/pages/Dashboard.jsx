@@ -1,15 +1,25 @@
 import { useEffect, useState } from 'react'
-import { Users, UserCheck, BookOpen, TrendingUp, Clock } from 'lucide-react'
+import { Users, BookOpen, GraduationCap, TrendingUp, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+
+const SUBJECT_LOGOS = {
+  Physics: 'https://github.com/With-ALIF/logo_zone/blob/main/book/Physics.png?raw=true',
+  Chemistry: 'https://github.com/With-ALIF/logo_zone/blob/main/book/Chemistry.png?raw=true',
+  Biology: 'https://github.com/With-ALIF/logo_zone/blob/main/book/Biology.png?raw=true',
+  'Higher Math': 'https://github.com/With-ALIF/logo_zone/blob/main/book/Math.png?raw=true',
+  ICT: 'https://github.com/With-ALIF/logo_zone/blob/main/book/ICT.png?raw=true',
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
   const [stats, setStats] = useState({
     totalStudents: 0,
-    activeStudents: 0,
+    totalSubjects: 0,
+    totalChapters: 0,
     completedChapters: 0,
   })
+  const [subjectCounts, setSubjectCounts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -22,15 +32,34 @@ export default function Dashboard() {
 
     const { data: students } = await supabase
       .from('students')
-      .select('id, is_active')
+      .select('id')
       .eq('teacher_id', user.id)
 
     const totalStudents = students?.length || 0
-    const activeStudents = students?.filter(s => s.is_active).length || 0
-
     const studentIds = students?.map(s => s.id) || []
 
+    const { data: allSubjectEnrollments } = await supabase
+      .from('student_subjects')
+      .select('subject_name')
+      .in('student_id', studentIds)
+
+    const countMap = {}
+    ;(allSubjectEnrollments || []).forEach(e => {
+      countMap[e.subject_name] = (countMap[e.subject_name] || 0) + 1
+    })
+    const sorted = Object.entries(countMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+
+    setSubjectCounts(sorted)
+    setStats(prev => ({ ...prev, totalStudents, totalSubjects: sorted.length }))
+
     let completedChapters = 0
+
+    const { count: totalChapters } = await supabase
+      .from('chapters')
+      .select('id', { count: 'exact', head: true })
+
     if (studentIds.length > 0) {
       const { data: chapters } = await supabase
         .from('student_chapters')
@@ -41,7 +70,7 @@ export default function Dashboard() {
       completedChapters = chapters?.length || 0
     }
 
-    setStats({ totalStudents, activeStudents, completedChapters })
+    setStats({ totalStudents, totalSubjects: sorted.length, totalChapters: totalChapters || 0, completedChapters })
 
     if (studentIds.length > 0) {
       const { data: recent } = await supabase
@@ -69,8 +98,8 @@ export default function Dashboard() {
 
   const statCards = [
     { label: 'Total Students', value: stats.totalStudents, icon: Users, color: 'bg-blue-500' },
-    { label: 'Active Students', value: stats.activeStudents, icon: UserCheck, color: 'bg-green-500' },
-    { label: 'Completed Chapters', value: stats.completedChapters, icon: BookOpen, color: 'bg-purple-500' },
+    { label: 'Total Subjects', value: stats.totalSubjects, icon: GraduationCap, color: 'bg-green-500' },
+    { label: 'Total Chapters', value: stats.totalChapters, icon: BookOpen, color: 'bg-purple-500' },
   ]
 
   return (
@@ -80,7 +109,7 @@ export default function Dashboard() {
         <p className="text-gray-500 mt-1">Welcome back! Here's your teaching overview.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statCards.map((card) => (
           <div key={card.label} className="bg-white rounded-lg border border-gray-200 p-5">
             <div className="flex items-center justify-between">
@@ -113,17 +142,17 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {recentActivity.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
+                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 line-clamp-3 leading-snug break-words">
                         {item.students?.name} — {item.chapters?.chapter_name}
                       </p>
                       <p className="text-xs text-gray-500">{item.chapters?.subject_name}</p>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">Completed</span>
                     <p className="text-xs text-gray-500 mt-1">{new Date(item.completed_at).toLocaleDateString()}</p>
                   </div>
