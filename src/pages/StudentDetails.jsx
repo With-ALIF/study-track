@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BookOpen, Phone, School, StickyNote, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, Phone, School, StickyNote, ChevronDown, ChevronUp, Trash2, Plus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
@@ -13,9 +13,13 @@ export default function StudentDetails() {
   const [loading, setLoading] = useState(true)
   const [expandedSubject, setExpandedSubject] = useState(null)
   const [initializing, setInitializing] = useState(false)
+  const [showAddSubject, setShowAddSubject] = useState(false)
+  const [allSubjects, setAllSubjects] = useState([])
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null })
 
   useEffect(() => {
     fetchStudent()
+    fetchAllSubjects()
   }, [name, user])
 
   const fetchStudent = async () => {
@@ -44,16 +48,65 @@ export default function StudentDetails() {
 
     const { data: chapterData } = await supabase
       .from('student_chapters')
-      .select('id, subject_name, chapter_name, status, completed_at')
+      .select('id, chapter_id, status, completed_at, chapters(id, subject_name, chapter_number, chapter_name, paper)')
       .eq('student_id', studentData.id)
 
     const subjectsWithChapters = (subjectData || []).map(sub => ({
       ...sub,
-      student_chapters: (chapterData || []).filter(ch => ch.subject_name === sub.subject_name)
+      student_chapters: (chapterData || [])
+        .filter(ch => ch.chapters?.subject_name === sub.subject_name)
+        .map(ch => ({
+          id: ch.id,
+          chapter_id: ch.chapter_id,
+          status: ch.status,
+          completed_at: ch.completed_at,
+          subject_name: ch.chapters.subject_name,
+          chapter_number: ch.chapters.chapter_number,
+          chapter_name: ch.chapters.chapter_name,
+          paper: ch.chapters.paper,
+        }))
     }))
 
     setSubjects(subjectsWithChapters)
     setLoading(false)
+  }
+
+  const fetchAllSubjects = async () => {
+    const { data } = await supabase.from('subjects').select('name')
+    setAllSubjects(data?.map(s => s.name) || [])
+  }
+
+  const addSubject = async (subjectName) => {
+    await supabase.from('student_subjects').insert({
+      student_id: student.id,
+      subject_name: subjectName,
+    })
+    setShowAddSubject(false)
+    fetchStudent()
+  }
+
+  const removeSubject = async (subjectName) => {
+    setConfirmModal({
+      show: true,
+      title: 'Remove Subject',
+      message: `Remove ${subjectName}? This will also delete all chapter tracking for this subject.`,
+      onConfirm: async () => {
+        const { data: subjectChapters } = await supabase
+          .from('chapters')
+          .select('id')
+          .eq('subject_name', subjectName)
+
+        const chapterIds = subjectChapters?.map(c => c.id) || []
+        if (chapterIds.length > 0) {
+          await supabase.from('student_chapters').delete()
+            .eq('student_id', student.id)
+            .in('chapter_id', chapterIds)
+        }
+        await supabase.from('student_subjects').delete().eq('student_id', student.id).eq('subject_name', subjectName)
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null })
+        fetchStudent()
+      }
+    })
   }
 
   const initializeChapters = async (subjectName) => {
@@ -61,42 +114,33 @@ export default function StudentDetails() {
 
     const { data: allChapters, error: chaptersError } = await supabase
       .from('chapters')
-      .select('*')
+      .select('id')
       .eq('subject_name', subjectName)
       .order('chapter_number')
 
-    if (chaptersError) {
-      console.error('Error fetching chapters:', chaptersError)
-      setInitializing(false)
-      return
-    }
-
-    if (!allChapters || allChapters.length === 0) {
+    if (chaptersError || !allChapters || allChapters.length === 0) {
       setInitializing(false)
       return
     }
 
     const { data: existingChapters } = await supabase
       .from('student_chapters')
-      .select('chapter_name')
+      .select('chapter_id')
       .eq('student_id', student.id)
-      .eq('subject_name', subjectName)
+      .in('chapter_id', allChapters.map(c => c.id))
 
-    const existingNames = existingChapters?.map(c => c.chapter_name) || []
+    const existingIds = existingChapters?.map(c => c.chapter_id) || []
     const newChapters = allChapters
-      .filter(ch => !existingNames.includes(ch.chapter_name))
+      .filter(ch => !existingIds.includes(ch.id))
       .map(ch => ({
         student_id: student.id,
-        subject_name: subjectName,
-        chapter_name: ch.chapter_name,
+        chapter_id: ch.id,
         status: 'not_started',
       }))
 
     if (newChapters.length > 0) {
       const { error: insertError } = await supabase.from('student_chapters').insert(newChapters)
-      if (insertError) {
-        console.error('Error inserting student_chapters:', insertError)
-      }
+      if (insertError) console.error('Error inserting student_chapters:', insertError)
     }
 
     await fetchStudent()
@@ -126,12 +170,18 @@ export default function StudentDetails() {
   }
 
   const deleteStudent = async () => {
-    if (!confirm(`Delete ${student.name}? This cannot be undone.`)) return
-
-    await supabase.from('student_chapters').delete().eq('student_id', student.id)
-    await supabase.from('student_subjects').delete().eq('student_id', student.id)
-    await supabase.from('students').delete().eq('id', student.id)
-    navigate('/students')
+    setConfirmModal({
+      show: true,
+      title: 'Delete Student',
+      message: `Delete ${student.name}? This cannot be undone.`,
+      onConfirm: async () => {
+        await supabase.from('student_chapters').delete().eq('student_id', student.id)
+        await supabase.from('student_subjects').delete().eq('student_id', student.id)
+        await supabase.from('students').delete().eq('id', student.id)
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null })
+        navigate('/students')
+      }
+    })
   }
 
   if (loading) {
@@ -217,10 +267,44 @@ export default function StudentDetails() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-gray-400" />
-          Assigned Subjects
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-gray-400" />
+            Assigned Subjects
+          </h2>
+          <button
+            onClick={() => {
+              setShowAddSubject(!showAddSubject)
+              if (!showAddSubject) fetchAllSubjects()
+            }}
+            className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add Subject
+          </button>
+        </div>
+
+        {showAddSubject && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <p className="text-sm text-gray-500 mb-3">Select a subject to add:</p>
+            <div className="flex flex-wrap gap-2">
+              {allSubjects
+                .filter(s => !subjects.some(sub => sub.subject_name === s))
+                .map(subject => (
+                  <button
+                    key={subject}
+                    onClick={() => addSubject(subject)}
+                    className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
+                  >
+                    + {subject}
+                  </button>
+                ))}
+              {allSubjects.filter(s => !subjects.some(sub => sub.subject_name === s)).length === 0 && (
+                <p className="text-sm text-gray-400">All subjects already assigned.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {subjects.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
@@ -255,8 +339,19 @@ export default function StudentDetails() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-20 bg-gray-100 rounded-full h-2">
-                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div>
+                      <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
                     </div>
+                    <span className="text-sm font-medium text-gray-500 w-10 text-right">{progress}%</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeSubject(sub.subject_name)
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                      title="Remove subject"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                     {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
                   </div>
                 </button>
@@ -273,37 +368,111 @@ export default function StudentDetails() {
                         No chapters available for this subject.
                       </div>
                     ) : (
-                      <div className="divide-y divide-gray-100">
-                        {[...sub.student_chapters].sort((a, b) => {
-                          if (a.status === 'completed' && b.status !== 'completed') return 1
-                          if (a.status !== 'completed' && b.status === 'completed') return -1
-                          const numA = parseInt(a.chapter_name.match(/\d+/)?.[0] || '0')
-                          const numB = parseInt(b.chapter_name.match(/\d+/)?.[0] || '0')
-                          return numA - numB
-                        }).map((chapter) => (
-                          <div key={chapter.id} className="px-5 py-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{chapter.chapter_name}</p>
-                              {chapter.completed_at && (
-                                <p className="text-xs text-gray-500">
-                                  Completed: {new Date(chapter.completed_at).toLocaleDateString()}
-                                </p>
-                              )}
-                            </div>
-                            <select
-                              value={chapter.status}
-                              onChange={(e) => updateChapterStatus(chapter.id, e.target.value)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                chapter.status === 'completed'
-                                  ? 'bg-green-50 border-green-200 text-green-700'
-                                  : 'bg-gray-50 border-gray-200 text-gray-600'
-                              }`}
-                            >
-                              <option value="not_started">Not Started</option>
-                              <option value="completed">Completed</option>
-                            </select>
-                          </div>
-                        ))}
+                      <div>
+                        {(() => {
+                          const hasPaper = sub.student_chapters.some(ch => ch.paper)
+                          if (!hasPaper) {
+                            const sorted = [...sub.student_chapters].sort((a, b) => {
+                              if (a.status === 'completed' && b.status !== 'completed') return 1
+                              if (a.status !== 'completed' && b.status === 'completed') return -1
+                              return (a.chapter_number || 0) - (b.chapter_number || 0)
+                            })
+                            return (
+                              <div className="divide-y divide-gray-100">
+                                {sorted.map((chapter) => (
+                                  <div key={chapter.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <span className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-xs font-semibold text-gray-600">
+                                        {String(chapter.chapter_number).padStart(2, '0')}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{chapter.chapter_name}</p>
+                                        {chapter.completed_at && (
+                                          <p className="text-xs text-gray-500">
+                                            Completed: {new Date(chapter.completed_at).toLocaleDateString()}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <select
+                                      value={chapter.status}
+                                      onChange={(e) => updateChapterStatus(chapter.id, e.target.value)}
+                                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        chapter.status === 'completed'
+                                          ? 'bg-green-50 border-green-200 text-green-700'
+                                          : 'bg-gray-50 border-gray-200 text-gray-600'
+                                      }`}
+                                    >
+                                      <option value="not_started">Not Started</option>
+                                      <option value="completed">Completed</option>
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                            )
+                          }
+                          return ['1st Paper', '2nd Paper'].map(paper => {
+                            const paperChapters = sub.student_chapters
+                              .filter(ch => ch.paper === paper)
+                              .sort((a, b) => {
+                                if (a.status === 'completed' && b.status !== 'completed') return 1
+                                if (a.status !== 'completed' && b.status === 'completed') return -1
+                                return (a.chapter_number || 0) - (b.chapter_number || 0)
+                              })
+                            if (paperChapters.length === 0) return null
+                            const completedCount = paperChapters.filter(ch => ch.status === 'completed').length
+                            const paperProgress = Math.round((completedCount / paperChapters.length) * 100)
+                            return (
+                              <div key={paper} className="border-b border-gray-100 last:border-b-0">
+                                <div className="px-5 py-4 bg-gray-50">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-800">{paper}</p>
+                                      <p className="text-xs text-gray-500 mt-0.5">{completedCount} of {paperChapters.length} done</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                        <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${paperProgress}%` }} />
+                                      </div>
+                                      <span className="text-sm font-bold text-gray-700 w-9 text-right">{paperProgress}%</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="divide-y divide-gray-100">
+                                  {paperChapters.map((chapter) => (
+                                    <div key={chapter.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <span className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-xs font-semibold text-gray-600">
+                                          {String(chapter.chapter_number).padStart(2, '0')}
+                                        </span>
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-medium text-gray-900 truncate">{chapter.chapter_name}</p>
+                                          {chapter.completed_at && (
+                                            <p className="text-xs text-gray-500">
+                                              Completed: {new Date(chapter.completed_at).toLocaleDateString()}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <select
+                                        value={chapter.status}
+                                        onChange={(e) => updateChapterStatus(chapter.id, e.target.value)}
+                                        className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                          chapter.status === 'completed'
+                                            ? 'bg-green-50 border-green-200 text-green-700'
+                                            : 'bg-gray-50 border-gray-200 text-gray-600'
+                                        }`}
+                                      >
+                                        <option value="not_started">Not Started</option>
+                                        <option value="completed">Completed</option>
+                                      </select>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })
+                        })()}
                       </div>
                     )}
                   </div>
@@ -313,6 +482,29 @@ export default function StudentDetails() {
           })
         )}
       </div>
+
+      {confirmModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{confirmModal.title}</h3>
+            <p className="text-sm text-gray-600 mb-6">{confirmModal.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

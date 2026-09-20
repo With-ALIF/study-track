@@ -46,7 +46,7 @@ export default function Dashboard() {
     if (studentIds.length > 0) {
       const { data: recent } = await supabase
         .from('student_chapters')
-        .select('id, subject_name, chapter_name, completed_at, students(name)')
+        .select('id, completed_at, students(name), chapters(subject_name, chapter_name)')
         .in('student_id', studentIds)
         .eq('status', 'completed')
         .not('completed_at', 'is', null)
@@ -118,9 +118,9 @@ export default function Dashboard() {
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {item.students?.name} — {item.chapter_name}
+                        {item.students?.name} — {item.chapters?.chapter_name}
                       </p>
-                      <p className="text-xs text-gray-500">{item.subject_name}</p>
+                      <p className="text-xs text-gray-500">{item.chapters?.subject_name}</p>
                     </div>
                   </div>
                   <div className="text-right">

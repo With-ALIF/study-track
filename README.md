@@ -30,13 +30,13 @@ A personal tuition/student teaching tracker for teachers. Track students, assign
 
 | Subject      | Chapters |
 |--------------|----------|
-| Physics      | 20       |
+| Physics      | 21       |
 | Chemistry    | 10       |
 | Biology      | 24       |
 | Higher Math  | 20       |
 | ICT          | 6        |
 
-**Total: 80 pre-loaded chapters**
+**Total: 81 pre-loaded chapters**
 
 ## Routes
 
