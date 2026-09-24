@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 
 export default function Settings() {
   const { user } = useAuth()
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -55,8 +56,7 @@ export default function Settings() {
             <User className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="font-semibold text-gray-900">Account</h2>
-            <p className="text-sm text-gray-500">{user?.email}</p>
+            <p className="text-sm text-gray-500">{userName}</p>
           </div>
         </div>
 

@@ -9,6 +9,7 @@ import Students from './pages/Students'
 import AddStudent from './pages/AddStudent'
 import StudentDetails from './pages/StudentDetails'
 import Settings from './pages/Settings'
+import ExamCenter from './exam/ExamCenter'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="students" element={<Students />} />
             <Route path="students/new" element={<AddStudent />} />
             <Route path="students/:name" element={<StudentDetails />} />
+            <Route path="exam" element={<ExamCenter />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, Settings, LogOut, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, LogOut, BookOpen, CalendarDays } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/students', icon: Users, label: 'Students' },
+  { to: '/exam', icon: CalendarDays, label: 'Exam Center' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
