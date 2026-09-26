@@ -78,7 +78,8 @@ insert into subjects (name) values
   ('Physics'),
   ('Chemistry'),
   ('Higher Math'),
-  ('ICT');
+  ('ICT'),
+  ('Biology');
 
 -- Enable RLS on all tables
 alter table profiles enable row level security;

@@ -1,11 +1,20 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Users, Settings, LogOut, BookOpen, CalendarDays } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Users,
+  Settings,
+  LogOut,
+  BookOpen,
+  CalendarDays,
+  ListChecks,
+} from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/students', icon: Users, label: 'Students' },
   { to: '/exam', icon: CalendarDays, label: 'Exam Center' },
+  { to: '/chapter-routine', icon: ListChecks, label: 'Chapter Routine' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -90,6 +99,7 @@ export default function Layout() {
             <NavLink
               key={item.to}
               to={item.to}
+              title={item.label}
               className={({ isActive }) =>
                 `flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors ${
                   isActive
@@ -99,7 +109,6 @@ export default function Layout() {
               }
             >
               <item.icon className="w-5 h-5" />
-              <span className="text-xs font-medium">{item.label}</span>
             </NavLink>
           ))}
         </div>
